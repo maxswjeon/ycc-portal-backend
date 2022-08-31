@@ -7,3 +7,5 @@ package.json
 package-lock.json
 
 docker-compose.yml
+
+vendor/

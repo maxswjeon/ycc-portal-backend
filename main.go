@@ -101,7 +101,7 @@ func set_cors_headers(engine *gin.Engine) {
 	}))
 }
 
-func ldap_check_connect() {
+func ldap_check_connect() *ldap.Conn {
 	domain := os.Getenv("LDAP_DOMAIN")
 
 	conn, err := ldap.DialURL(domain)
@@ -127,6 +127,8 @@ func ldap_check_connect() {
 			log.Panicf("Failed to bind to %s with error %v", username, err)
 		}
 	}
+
+	return conn
 }
 
 func set_session(engine *gin.Engine) {
@@ -177,6 +179,10 @@ func set_session(engine *gin.Engine) {
 	engine.Use(sessions.Sessions(os.Getenv("SESSION_NAME"), store))
 }
 
+func set_multipart_options(engine *gin.Engine) {
+	engine.MaxMultipartMemory = 500 << 20 // 500 MiB
+}
+
 func main() {
 	Load_env()
 	Ensure_env()
@@ -190,7 +196,11 @@ func main() {
 
 	set_session(engine)
 
-	ldap_check_connect()
+	conn := ldap_check_connect()
+	defer conn.Close()
+	engine.Use(func(ctx *gin.Context) {
+		ctx.Set("ldap", conn)
+	})
 
 	routes.Apply(engine)
 

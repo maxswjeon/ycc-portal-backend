@@ -1,10 +1,8 @@
-package users
+package groups
 
 import (
 	"lmm_backend/utils"
 	"net/http"
-	"os"
-	"strconv"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -47,49 +45,40 @@ func GET(c *gin.Context) {
 		return
 	}
 
-	conn := c.MustGet("ldap").(*ldap.Conn)
-
-	searchRequest := ldap.NewSearchRequest(
-		os.Getenv("LDAP_BASE_DN"),
-		ldap.ScopeWholeSubtree,
-		ldap.NeverDerefAliases,
-		0,     // SizeLimit
-		30,    // TimeLimit
-		false, // TypesOnly
-		"(&(objectClass=student)(uid=*))",
-		[]string{"dn", "cn", "uid", "studentEmail", "uidNumber"},
-		nil, // Controls
-	)
-
-	result, err := conn.Search(searchRequest)
-	if err != nil {
+	connRaw := c.MustGet("ldap")
+	if connRaw == nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 			"result": false,
-			"error":  "Failed to search LDAP",
+			"error":  "Internal Server Error - No LDAP connection",
 		})
 		return
 	}
 
-	var users []utils.UserSlim
+	conn := connRaw.(*ldap.Conn)
+
+	result, err := utils.LDAPGetGroups(conn)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"result": false,
+			"error":  "Internal Server Error - LDAP Query Error",
+		})
+		return
+	}
+
+	var groupsData []utils.Group
 	for _, entry := range result.Entries {
-		uidNumber, err := strconv.Atoi(entry.GetAttributeValue("uidNumber"))
-		if err != nil {
-			uidNumber = -1
+		group := utils.Group{
+			DN:  entry.DN,
+			Cn: entry.GetAttributeValue("cn"),
+			Description: entry.GetAttributeValue("description"),
+			Members: entry.GetAttributeValues("member"),
 		}
 
-		user := utils.UserSlim{
-			DN:        entry.DN,
-			Uid:       entry.GetAttributeValue("uid"),
-			Cn:        entry.GetAttributeValue("cn"),
-			Mail:      entry.GetAttributeValue("studentEmail"),
-			UidNumber: uidNumber,
-		}
-
-		users = append(users, user)
+		groupsData = append(groupsData, group)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"result": true,
-		"data":   users,
+		"groups": groupsData,
 	})
 }
