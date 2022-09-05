@@ -26,19 +26,19 @@ func LDAPGeneratePassword() (string, string) {
 	rand.Read(rawPass)
 
 	password := base64.StdEncoding.EncodeToString(rawPass)
-	
+
 	encoder := SSHAEncoder{}
 	hash := encoder.Encode([]byte(password))
-	
+
 	return password, hash
 }
 
-func LDAPAddUser(conn *ldap.Conn, uid string, sn string, gn string, uidNumber string, telephoneNumber string, mail string, birthday string, gender string, colleage string, majors string, enrolled bool, graduated bool, password string, hash string) (error) {
+func LDAPAddUser(conn *ldap.Conn, uid string, sn string, gn string, uidNumber string, telephoneNumber string, mail string, birthday string, gender string, colleage string, majors string, enrolled bool, graduated bool, password string, hash string) error {
 	// sambaSID Length 64 -> 48bit to base64
 	sambaSIDBytes := make([]byte, 48)
 	rand.Read(sambaSIDBytes)
 	sambaSID := base64.StdEncoding.EncodeToString(sambaSIDBytes)
-	
+
 	addRequest := ldap.NewAddRequest("uid="+uid+",ou=people,"+os.Getenv("LDAP_BASE_DN"), nil)
 	addRequest.Attribute("objectClass", []string{"inetOrgPerson", "organizationalPerson", "person", "student", "PostfixBookMailAccount", "sambaSamAccount"})
 	addRequest.Attribute("cn", []string{sn + gn})
@@ -59,7 +59,6 @@ func LDAPAddUser(conn *ldap.Conn, uid string, sn string, gn string, uidNumber st
 	addRequest.Attribute("userPassword", []string{hash})
 	addRequest.Attribute("sambaSID", []string{sambaSID})
 	addRequest.Attribute("sambaNTPassword", []string{"{nt}" + NTLMHash(password)})
-	
 
 	if err := conn.Add(addRequest); err != nil {
 		return err
@@ -93,9 +92,9 @@ func LDAPGetGroups(conn *ldap.Conn) (*ldap.SearchResult, error) {
 		os.Getenv("LDAP_BASE_DN"),
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
-		0,     // SizeLimit
-		30,    // TimeLimit
-		false, // TypesOnly
+		0,                               // SizeLimit
+		30,                              // TimeLimit
+		false,                           // TypesOnly
 		"(&(objectClass=groupOfNames))", // Filter
 		[]string{"cn", "member", "description"},
 		nil, // Controls
